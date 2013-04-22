@@ -27,8 +27,10 @@ describe("JSE Object inheritance", function() {
         expect(dest.testMember.length).toBe(1);
     });
 
-    var src = function() {
+    var src = function(str, num) {
         this.myMember = "ok";
+        this.myCustomMember = str || "";
+        this.myCustomNumber = num || 0;
     };
     src.prototype = {
         testMethod: function() {
@@ -48,6 +50,13 @@ describe("JSE Object inheritance", function() {
         expect(dest.testMember).toBeDefined();
         expect(typeof(dest.testMember)).toBe("object");
         expect(dest.testMember.length).toBe(1);
+    });
+    it("Inheritance should pass arguments to the source constructor", function() {
+        var otherDest = {};
+        JSE.extend(otherDest, JSE.Object);
+        otherDest.extend(src, "hello", 10);
+        expect(otherDest.myCustomMember).toBe("hello");
+        expect(otherDest.myCustomNumber).toBe(10);
     });
     it("Inheritance should share objects between source and extended objects", function() {
         var srcInstance = new src();
@@ -98,4 +107,5 @@ describe("JSE literal notation", function() {
         expect(typeof(objInstance.member)).toBe("object");
         expect(objInstance.member.length).toBeDefined();
     });
+
 });
