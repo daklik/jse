@@ -735,18 +735,26 @@ JSE.Object.prototype.isolate = JSE.Object.prototype.removeEventListeners = funct
 };
 /**
  *
+ * @param wire
+ * @private
+ */
+JSE._buildWireHub = function(wire) {
+    if (!this.JSEwireHub) {
+        this.JSEwireHub = [];
+    }
+    if (wire && !this.JSEwireHub[wire.event]) {
+        this.JSEwireHub[wire.event] = [];
+    }
+};
+/**
+ *
  * @type {Function}
  */
 JSE.Object.prototype.plugWire = JSE.Object.prototype.addEventListener = JSE.Object.prototype.on = function (wire) {
     wire = JSE.buildWire.apply(JSE, arguments);
     if ((wire !== null) && (wire.method)) {
         // own JSEWireHub
-        if (!this.JSEwireHub) {
-            this.JSEwireHub = [];
-        }
-        if (!this.JSEwireHub[wire.event]) {
-            this.JSEwireHub[wire.event] = [];
-        }
+        JSE._buildWireHub.call(this, wire);
         this.JSEwireHub[wire.event].push(wire);
 
         // JSEExtRef on destination thisObj (for isolation)
@@ -769,9 +777,7 @@ JSE.Object.prototype.unplugWire = JSE.Object.prototype.removeEventListener = fun
     wire = JSE.buildWire.apply(JSE, arguments);
     if (wire !== null) {
         // JSEWire deletion in own JSEWireHub
-        if (!this.JSEwireHub) {
-            this.JSEwireHub = [];
-        }
+        JSE._buildWireHub.call(this);
         if (this.JSEwireHub[wire.event]) {
             for (var i = 0; i < this.JSEwireHub[wire.event].length; i++) {
                 if ((wire.method === this.JSEwireHub[wire.event][i].method) && ((wire.thisObj === this.JSEwireHub[wire.event][i].thisObj))) {
@@ -791,12 +797,7 @@ JSE.Object.prototype.unplugWire = JSE.Object.prototype.removeEventListener = fun
  * @type {Function}
  */
 JSE.Object.prototype.stimulate = JSE.Object.prototype.triggerEvent = JSE.Object.prototype.emit = function (strEvent) {
-    if (!this.JSEwireHub) {
-        this.JSEwireHub = [];
-    }
-    if (!this.JSEwireHub[strEvent]) {
-        this.JSEwireHub[strEvent] = [];
-    }
+    JSE._buildWireHub.call(this);
     if (this.JSEwireHub[strEvent]) {
         var tmpArray = [], i;
         for (i = 0; i < this.JSEwireHub[strEvent].length; i++) {
@@ -821,20 +822,24 @@ JSE.Object.prototype.stimulate = JSE.Object.prototype.triggerEvent = JSE.Object.
  */
 JSE.Object.prototype.prepare = function () {
 
-    function checkAndBuild(obj) {
+    function checkAndBuild(obj, thisObj, type) {
+        var members;
         if (typeof(obj) === "string") {
             members = obj.split(".");
             if (members[0] === "JSEInstance") {
-                thisObj = this;
+                obj = thisObj;
                 for (j = 1; j < members.length; j++) {
-                    thisObj = thisObj[members[j]];
+                    obj = obj[members[j]];
                 }
-                return thisObj;
+                return obj;
             }
             else {
                 return eval(obj);
             }
+        } else if (typeof(obj) === type) {
+            return obj;
         }
+        return false;
     }
 
     //Instanciate member objects and build wires
@@ -844,7 +849,7 @@ JSE.Object.prototype.prepare = function () {
     }
     var _wireToTreat = {};
     if (!this._isPrepared) {
-        var item, wires, wire, i, members, j, method, thisObj;
+        var item, wires, wire, i, members, j;
         for (item in object) {
             //Member objects instanciation
             if ((object[item] !== null) && (item !== "JSEwireHub") && (item !== "JSEEvents")) {
@@ -910,9 +915,11 @@ JSE.Object.prototype.prepare = function () {
 
                     for (i = 0; i < wires.length; i++) {
                         wire = new JSEWire(wires[i].event, wires[i].method, wires[i].thisObj);
-                        wire.method = checkAndBuild(wire.method);
-                        wire.thisObj = checkAndBuild(wire.thisObj);
-                        this[item].plugWire(wire);
+                        wire.method = checkAndBuild(wire.method, this, "function");
+                        wire.thisObj = checkAndBuild(wire.thisObj, this, "object");
+                        if (wire.method) {
+                            this[item].plugWire(wire);
+                        }
                     }
                 }
             }
@@ -921,9 +928,7 @@ JSE.Object.prototype.prepare = function () {
         //Auto wiring
         if (object.JSEwireHub || object.JSEEvents) {
             item = "JSEwireHub";
-            if (object.JSEEvents && !object.JSEwireHub) {
-                item = "JSEEvents";
-            }
+
             var tmpHub = [], hubItem;
             for (hubItem in object[item]) {
                 if (!JSE.Object.prototype[item]) {
@@ -931,10 +936,10 @@ JSE.Object.prototype.prepare = function () {
                     for (i = 0; i < object[item][hubItem].length; i++) {
                         if (object[item][hubItem][i] && object[item][hubItem][i].method) {
                             wire = new JSEWire(object[item][hubItem][i].event, object[item][hubItem][i].method, object[item][hubItem][i].thisObj);
-                            wire.method = checkAndBuild(wire.method);
+                            wire.method = checkAndBuild(wire.method, this, "function");
 
                             if (wire.method) {
-                                wire.thisObj = checkAndBuild(wire.thisObj);
+                                wire.thisObj = checkAndBuild(wire.thisObj, this, "object");
                                 tmpHub[hubItem].push(wire);
                             }
                         }
@@ -1087,7 +1092,7 @@ JSEWire = function (event, method, thisObj, args) {
  * @returns {Function}
  * @constructor
  */
-JSECallback = function (fcn, thisObj) {
+JSE.Callback = function (fcn, thisObj) {
     var args = null;
     if (arguments.length > 2) {
         args = Array.prototype.slice.apply(arguments, [2]);
