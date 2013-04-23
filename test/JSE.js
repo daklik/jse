@@ -315,6 +315,7 @@ describe("JSE literal notation", function() {
         var myInstance = new innerObject();
 
         expect(myInstance.myObj.myMember).toBeDefined();
+        expect(myInstance.myObj.init).toBeDefined();
         expect(myInstance.myObj.myMember).toBe("hello");
 
         myInstance.myObj.emit("onUpdate", 3);
