@@ -1,4 +1,6 @@
 /* jshint undef:false*/
+var globy = (window||global);
+
 describe("JSE objects and methods", function() {
     it("JSE should be defined", function() {
         expect(JSE).toBeDefined();
@@ -208,6 +210,9 @@ describe("JSE literal notation", function() {
         obj.prototype = {
             "member" : {
                 "JSEType" : "Array"
+            },
+            navigator : {
+                "JSEType" : "window.navigator"
             }
         };
         JSE.extend(obj, JSE.Object);
@@ -216,15 +221,17 @@ describe("JSE literal notation", function() {
         expect(objInstance.member).toBeDefined();
         expect(typeof(objInstance.member)).toBe("object");
         expect(objInstance.member.length).toBeDefined();
+        expect(objInstance.navigator.appName).toBeDefined();
     });
     it("JSE preparation should pass JSETypeParams as arguments to JSEType constructor", function() {
         var myobj = function(){
+            this.myWord = "hello";
             this.prepare();
         };
         myobj.prototype = {
             "mymember" : {
                 "JSEType" : "Array",
-                "JSETypeParams" : [10, "hello", "world"]
+                "JSETypeParams" : [10, "JSEInstance.myWord", "world"]
             }
         };
         JSE.extend(myobj, JSE.Object);
@@ -235,7 +242,7 @@ describe("JSE literal notation", function() {
         expect(objInstance.mymember[2]).toBe("world");
     });
     it("JSE preparation should plug self event listeners", function() {
-        (window||global).set = function(a){this.str = a;};
+        globy.set = function(a){this.str = a;};
         var myObj = function() {
             this.nb = 0;
             this.str = "";
@@ -248,9 +255,9 @@ describe("JSE literal notation", function() {
                     {method:"JSEInstance.update", thisObj:"JSEInstance"},
                     {method:"set", thisObj:"JSEInstance"},
                     {method:function(a){this.a = a;}, thisObj:"JSEInstance"},
-                    {method:function(a){this.a = a;}, thisObj:(window||global)},
-                    {method:"set", thisObj:(window||global)},
-                    {method:"JSEInstance.update", thisObj:(window||global)}
+                    {method:function(a){this.a = a;}, thisObj:globy},
+                    {method:"set", thisObj:globy},
+                    {method:"JSEInstance.update", thisObj:globy}
                 ]
             },
             update : function(nb) {
@@ -263,11 +270,65 @@ describe("JSE literal notation", function() {
         expect(myInstance.nb).toBe(3);
         expect(myInstance.str).toBe(3);
         expect(myInstance.a).toBe(3);
-        expect((window||global).a).toBe(3);
-        expect((window||global).nb).toBe(3);
-        expect((window||global).str).toBe(3);
-        delete (window||global).set;
-        delete (window||global).a;
-        delete (window||global).nb;
+        expect(globy.a).toBe(3);
+        expect(globy.nb).toBe(3);
+        expect(globy.str).toBe(3);
+        delete globy.set;
+        delete globy.a;
+        delete globy.nb;
+        delete globy.str;
+    });
+    it("JSE preparation should plug events on prepared members", function() {
+        globy.set = function(a){this.str = a;};
+        globy.myObject = function() {
+            this.myMember = "hello";
+        };
+        globy.myObject.prototype = {
+            init : function() {
+
+            }
+        };
+        JSE.extend(globy.myObject, JSE.Object);
+        var innerObject = function() {
+            this.nb = 0;
+            this.str = "";
+            this.a = 0;
+            this.prepare();
+        };
+        innerObject.prototype = {
+            "myObj" : {
+                JSEType : "myObject",
+                JSEwires : [
+                    {event: "onUpdate", method:"JSEInstance.update", thisObj:"JSEInstance"},
+                    {event: "onUpdate", method:"set", thisObj:"JSEInstance"},
+                    {event: "onUpdate", method:function(a){this.a = a;}, thisObj:"JSEInstance"},
+                    {event: "onUpdate", method:function(a){this.a = a;}, thisObj:globy},
+                    {event: "onUpdate", method:"set", thisObj:globy},
+                    {event: "onUpdate", method:"JSEInstance.update", thisObj:globy}
+                ]
+            },
+            update : function(str) {
+                this.nb = str;
+            }
+        };
+        JSE.extend(innerObject, JSE.Object);
+        var myInstance = new innerObject();
+
+        expect(myInstance.myObj.myMember).toBeDefined();
+        expect(myInstance.myObj.myMember).toBe("hello");
+
+        myInstance.myObj.emit("onUpdate", 3);
+        expect(myInstance.nb).toBe(3);
+        expect(myInstance.str).toBe(3);
+        expect(myInstance.a).toBe(3);
+        expect(globy.a).toBe(3);
+        expect(globy.nb).toBe(3);
+        expect(globy.str).toBe(3);
+
+        delete globy.myObject;
+        delete globy.set;
+        delete globy.a;
+        delete globy.nb;
+        delete globy.str;
     });
 });
