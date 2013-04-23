@@ -1,0 +1,19 @@
+{
+    "name": "JSE",
+    "description": "Event driven Javascript with component loader",
+    "version": "0.0.1",
+    "author": "Stephane 'dakLiK' Maccari",
+    "contributors": [
+    ],
+    "keywords": [
+        "framework",
+        "event"
+    ],
+    "devDependencies": {
+        "jasmine-node": "*"
+    },
+    "repository": "git://github.com/daklik/jse",
+    "scripts": {
+        "test": "jasmine-node test/"
+    }
+}
