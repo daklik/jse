@@ -15,14 +15,17 @@ describe("JSE objects and methods", function() {
 });
 
 describe("JSE inheritance", function() {
-    it("Inheritance should copy methods and members from source static object", function() {
+    it("Inheritance should copy not owned methods and members from source static object", function() {
         var src = {
             testMethod: function() {
 
             },
-            testMember: ["1"]
+            testMember: ["1"],
+            notExtended : "hello"
         };
-        var dest = {};
+        var dest = {
+            notExtended : "world"
+        };
         JSE.extend(dest, JSE.Object);
         dest.extend(src);
 
@@ -31,6 +34,7 @@ describe("JSE inheritance", function() {
         expect(dest.testMember).toBeDefined();
         expect(typeof(dest.testMember)).toBe("object");
         expect(dest.testMember.length).toBe(1);
+        expect(dest.notExtended).toBe("world");
     });
 
     var src = function(str, num) {
