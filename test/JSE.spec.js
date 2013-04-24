@@ -46,13 +46,16 @@ describe("JSE inheritance", function() {
         testMethod: function() {
 
         },
-        testMember : ["1"]
+        testMember : ["1"],
+        notExtended : "hello"
     };
-    var dest = {};
+    var dest = {
+        notExtended : "world"
+    };
     JSE.extend(dest, JSE.Object);
     dest.extend(src);
 
-    it("Inheritance should copy methods and members from source class constructor and prototype", function() {
+    it("Inheritance should copy not owned methods and members from source class constructor and prototype", function() {
         expect(dest.myMember).toBeDefined();
         expect(dest.myMember).toBe("ok");
         expect(dest.testMethod).toBeDefined();
@@ -60,6 +63,7 @@ describe("JSE inheritance", function() {
         expect(dest.testMember).toBeDefined();
         expect(typeof(dest.testMember)).toBe("object");
         expect(dest.testMember.length).toBe(1);
+        expect(dest.notExtended).toBe("world");
     });
     it("Inheritance should pass arguments to the source constructor", function() {
         var otherDest = {};
