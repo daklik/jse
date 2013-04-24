@@ -135,9 +135,9 @@ JSE = {
      */
     systemInit: function () {
         function clear() {
-            this.applicationWires = null;
-            this.applicationConfiguration = null;
-            this.isLoadingApplication = false;
+            JSE.applicationWires = null;
+            JSE.applicationConfiguration = null;
+            JSE.isLoadingApplication = false;
         }
 
         //Init the JSELaunched application
