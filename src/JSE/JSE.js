@@ -95,6 +95,7 @@ JSE = {
     namespaces: [],
     namespacesXHR: [],
     namespacesCache: [],
+    namespacesWS : [],
     allNamespaces: [],
     loadedNamespaces: [],
     currentPackMaster: null,
@@ -103,9 +104,11 @@ JSE = {
     namespaceLoadIndex: -1,
     namespaceXHRLoadIndex: -1,
     namespaceCacheLoadIndex: -1,
+    namespaceWSLoadIndex: 0,
     namespacesLoaded: 0,
     namespacesXHRLoaded: 0,
     namespacesCacheLoaded: 0,
+    namespacesWSLoaded: 0,
     isLoadingApplication: false,
     rebuildingFromCache: false,
     //Définition de la configuration de l'application en cours de JSELaunch
@@ -116,6 +119,8 @@ JSE = {
     nextApplications: [],
     //Stock les noms des namespaces à ne pas augmenter avec JSE.Object
     externals: {},
+    //WebSockets
+    ws : {},
     /**
      *
      * @param source
@@ -221,8 +226,85 @@ JSE = {
      * @param namespace
      */
     loadWSComponent: function (namespace) {
-        if (!this.ws) {
-            this.ws = new WebSocket();
+
+        if (!this.ws[namespace.root]) {
+            JSE.isLoadingModule = true;
+            var socket = new WebSocket(namespace.root);
+            socket.onmessage = function(data) {
+                data = JSON.parse(data.data);
+                if (data.event === "importResponse") {
+                    JSE.addJSONToCache(data.packages);
+                    JSE.appendWSComponent(true);
+                }
+            };
+            socket.onopen = function() {
+                this.isOpen = true;
+                JSE.appendWSComponent(true);
+                this.onopen = null;
+            };
+            this.ws[namespace.root] = socket;
+        }
+        this.baseLoad(namespace, this.namespacesWS, this.appendWSComponent);
+        /*else {
+         JSE.ws[namespace.root].send(JSON.stringify({"event": "importRequest", "namespace": namespace.name, "cache":JSE.Cache.classes}));
+         }*/
+
+    },
+    appendWSComponent : function(isFromComponentLoad) {
+
+        if (!this.isLoadingModule || isFromComponentLoad) {
+
+            var namespace = JSE.namespacesWS[JSE.namespaceWSLoadIndex];
+
+            this.isLoadingModule = true;
+
+            if (JSE.Cache.getItem(namespace.name)) {
+                var content = JSE.Cache.getItem(namespace.name);
+                var data = content.source;
+                var oSc = document.createElement("script");
+                oSc.text = data;
+                try {
+                    if (eval("typeof("+namespace.name+") !== 'undefined'")) {
+                        var JSEClone = eval(namespace.name);
+                        JSE.JSEClone = JSEClone;
+                    }
+                } catch (e) {
+
+                }
+                document.body.appendChild(oSc);
+                JSE.componentWSLoaded();
+            }
+            else {
+
+                JSE.ws[namespace.root].send(JSON.stringify({"event": "importRequest", "namespace": namespace.name, "cache":JSE.Cache.classes}));
+            }
+        }
+
+    },
+    addJSONToCache : function(data) {
+        for (var i=0; i < data.length; i++) {
+            JSE.Cache.setItem(data[i][0], data[i][1], data[i][2]);
+        }
+    },
+    componentWSLoaded : function() {
+        if (this.JSEClone) {
+            var item;
+            for (item in this.JSEClone) {
+                eval(JSE.namespacesWS[JSE.namespaceWSLoadIndex].name)[item] = this.JSEClone[item];
+            }
+            this.JSEClone = "";
+        }
+
+        JSE.namespaceWSLoadIndex++;
+        JSE.isLoadingModule = false;
+        JSE.namespacesWSLoaded++;
+        if (JSE.namespacesWSLoaded === JSE.namespacesWS.length) {
+            //Controller initialization
+            JSE.isLoadingModule = false;
+            JSE.rebuildingFromCache = false;
+            JSE.triggerEvent("onImportDone");
+        } else {
+            JSE.appendWSComponent(true);
         }
     },
     /**
@@ -396,7 +478,7 @@ JSE = {
             } catch (e) {
 
             }
-            domScript.setAttribute("src", this.namespaces[this.namespaceLoadIndex].url + ((JSE.debug) ? "?debug=" + (new Date()).getTime() : ""));
+            domScript.setAttribute("src", this.namespaces[this.namespaceLoadIndex].url + "?" + JSE.Cache.getLibsLoaded());
             this.stimulate("onLoadingNamespace", this.namespaces[this.namespaceLoadIndex].name);
             var body = document.getElementsByTagName("body")[0];
             var head = document.getElementsByTagName("head")[0];
@@ -596,6 +678,7 @@ JSE = {
 JSE.Cache = {
     classes: {},
     strClasses: "",
+    libsLoaded : [],
     build: function () {
         this.strClasses = localStorage.getItem("JSE");
         var split = this.strClasses.split(":|:");
@@ -625,6 +708,36 @@ JSE.Cache = {
         if (JSE.useCache) {
             localStorage.setItem("JSE", JSE.Cache.strClasses);
         }
+    },
+    addFromLib : function(array) {
+        array.splice(0, 1);
+        //Conflict
+        this.noConflict = {};
+
+        for (var i=0; i < array.length; i++) {
+            try {
+                if (typeof(eval(array[i][0])) !== "undefined") {
+                    this.noConflict[array[i][0]] = eval(array[i][0]);
+                }} catch(e) {}
+        }
+        this.libsLoaded = this.libsLoaded.concat(array);
+    },
+    fixConflicts : function() {
+        var item, item2;
+        for (item in this.noConflict) {
+            for (item2 in this.noConflict[item]) {
+                if (item2 !== "JSE") {
+                    eval(item)[item2] = this.noConflict[item][item2];
+                }
+            }
+        }
+    },
+    getLibsLoaded : function() {
+        var str = "";
+        for (var i=0; i < this.libsLoaded.length; i++) {
+            str += "&" + this.libsLoaded[i][0] + "=" + this.libsLoaded[i][1];
+        }
+        return str;
     }
 };
 if (typeof(window) !== "undefined" && window.addEventListener) {
@@ -987,8 +1100,10 @@ JSE.Namespace = function (name, url) {
             if (oPath && oPath.path) {
                 if (typeof(oPath.path) === "string") {
                     this.url = oPath.path + basePath;
+                    this.root = oPath.path;
                 } else if (oPath.path.length === 1) {
                     this.url = oPath.path[0] + basePath;
+                    this.root = oPath.path[0];
                 } else {
                     var paramValue = 0;
                     for (i = 0; i < name.length; i++) {
@@ -996,6 +1111,7 @@ JSE.Namespace = function (name, url) {
                     }
                     var serverIndex = paramValue % oPath.path.length;
                     this.url = oPath.path[serverIndex] + basePath;
+                    this.root = oPath.path[serverIndex];
                 }
 
                 this.transport = ((oPath.transport) ? oPath.transport : "script");
