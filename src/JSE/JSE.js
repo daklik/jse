@@ -276,7 +276,7 @@ JSE = {
             }
             else {
 
-                JSE.ws[namespace.root].send(JSON.stringify({"event": "importRequest", "namespace": namespace.name, "cache":JSE.Cache.classes}));
+                JSE.ws[namespace.root].send(JSON.stringify({"event": "importRequest", "namespace": namespace.name, "cache":JSE.Cache.buildClassList()}));
             }
         }
 
@@ -738,6 +738,13 @@ JSE.Cache = {
             str += "&" + this.libsLoaded[i][0] + "=" + this.libsLoaded[i][1];
         }
         return str;
+    },
+    buildClassList : function() {
+        var item, result = {};
+        for (item in this.classes) {
+            result[item] = this.classes[item].version;
+        }
+        return result;
     }
 };
 if (typeof(window) !== "undefined" && window.addEventListener) {
