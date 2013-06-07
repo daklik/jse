@@ -29,7 +29,7 @@
 /* global JSE:true */
 /* global JSELaunch:true */
 /* global JSEImport:true */
-/* global JSEPackage:true */
+
 /* global JSEWire:true */
 /* global JSECallback:true */
 /* global XDomainRequest:false */
@@ -90,7 +90,7 @@ JSE = {
         "onObjectPreparationError": []
     },
     version: "2.0a",
-    useCache: false,
+    useCache: true,
     debug: false,
     namespaces: [],
     namespacesXHR: [],
@@ -121,6 +121,47 @@ JSE = {
     externals: {},
     //WebSockets
     ws : {},
+    canUseWebSocket : (window && "WebSocket" in window),
+    startSocket : function(url) {
+        JSE.isLoadingModule = true;
+        var socket = new WebSocket(url);
+        socket.onmessage = function(data) {
+            data = JSON.parse(data.data);
+            if (data.event === "importResponse") {
+                JSE.addJSONToCache(data.packages);
+                JSE.appendWSComponent(true);
+            }
+        };
+        socket.onopen = function() {
+            JSE.isLoadingModule = false;
+            this.isOpen = true;
+            if (JSE.namespacesWS.length > 0 && JSE.namespacesWSLoaded < JSE.namespacesWS.length) {
+                JSE.appendWSComponent(true);
+            }
+        };
+        socket.onclose = function() {
+            if (this.isOpen) {
+                JSE.startSocket(url);
+            } else {
+                JSE.canUseWebSocket = false;
+                JSE.isLoadingModule = false;
+            }
+        };
+        this.ws[url] = socket;
+    },
+    setPaths : function(obj) {
+        if (typeof(JSE.Paths) === "undefined") {
+            JSE.Paths = {};
+        }
+        for (var item in obj) {
+            JSE.Paths[item] = obj[item];
+            if (obj[item].transport && obj[item].transport === "ws" && JSE.canUseWebSocket) {
+                if (!this.ws[obj[item].path[0]]) {
+                    JSE.startSocket(obj[item].path[0]);
+                }
+            }
+        }
+    },
     /**
      *
      * @param source
@@ -226,29 +267,7 @@ JSE = {
      * @param namespace
      */
     loadWSComponent: function (namespace) {
-
-        if (!this.ws[namespace.root]) {
-            JSE.isLoadingModule = true;
-            var socket = new WebSocket(namespace.root);
-            socket.onmessage = function(data) {
-                data = JSON.parse(data.data);
-                if (data.event === "importResponse") {
-                    JSE.addJSONToCache(data.packages);
-                    JSE.appendWSComponent(true);
-                }
-            };
-            socket.onopen = function() {
-                this.isOpen = true;
-                JSE.appendWSComponent(true);
-                this.onopen = null;
-            };
-            this.ws[namespace.root] = socket;
-        }
         this.baseLoad(namespace, this.namespacesWS, this.appendWSComponent);
-        /*else {
-         JSE.ws[namespace.root].send(JSON.stringify({"event": "importRequest", "namespace": namespace.name, "cache":JSE.Cache.classes}));
-         }*/
-
     },
     appendWSComponent : function(isFromComponentLoad) {
 
@@ -298,13 +317,10 @@ JSE = {
         JSE.namespaceWSLoadIndex++;
         JSE.isLoadingModule = false;
         JSE.namespacesWSLoaded++;
-        if (JSE.namespacesWSLoaded === JSE.namespacesWS.length) {
-            //Controller initialization
-            JSE.isLoadingModule = false;
-            JSE.rebuildingFromCache = false;
-            JSE.triggerEvent("onImportDone");
-        } else {
+        if (JSE.namespacesWSLoaded < JSE.namespacesWS.length) {
             JSE.appendWSComponent(true);
+        } else {
+            JSE.isEverythingLoaded();
         }
     },
     /**
@@ -405,10 +421,7 @@ JSE = {
         if (JSE.namespacesCacheLoaded < JSE.namespacesCache.length) {
             JSE.appendCacheComponent(true);
         }
-        else if (JSE.namespacesXHRLoaded >= JSE.namespacesXHR.length && JSE.namespacesLoaded >= JSE.namespaces.length) {
-            JSE.endLoadingPhase();
-
-        }
+        else JSE.isEverythingLoaded();
     },
     /**
      *
@@ -542,12 +555,16 @@ JSE = {
         JSE.extend(nsEval, JSE.Object);
         JSE.stimulate("onNamespaceLoaded", this.jsenamespace);
 
-        if (JSE.namespacesXHRLoaded >= JSE.namespacesXHR.length && JSE.namespacesLoaded >= JSE.namespaces.length && JSE.namespacesCacheLoaded >= JSE.namespacesCache.length) {
+        JSE.isEverythingLoaded();
 
+    },
+    isEverythingLoaded : function() {
+        if (JSE.namespacesXHRLoaded >= JSE.namespacesXHR.length
+            && JSE.namespacesLoaded >= JSE.namespaces.length
+            && JSE.namespacesCacheLoaded >= JSE.namespacesCache.length
+            && JSE.namespacesWSLoaded >= JSE.namespacesWS.length) {
             JSE.endLoadingPhase();
-
         }
-
     },
     /**
      *
@@ -614,10 +631,7 @@ JSE = {
                 JSE.appendScriptComponent(true);
             }
         }
-        else if (JSE.namespacesXHRLoaded >= JSE.namespacesXHR.length && JSE.namespacesCacheLoaded >= JSE.namespacesCache.length) {
-            JSE.endLoadingPhase();
-
-        }
+        else JSE.isEverythingLoaded();
         this.onload = "";
     },
     componentReady: function () {
@@ -627,8 +641,8 @@ JSE = {
         }
     },
     hasNamespace: function (namespace) {
-        for (var i = 0; i < this.namespaces.length; i++) {
-            if (this.namespaces[i].equals(namespace)) {
+        for (var i = 0; i < this.allNamespaces.length; i++) {
+            if (this.allNamespaces[i].equals(namespace)) {
                 return true;
             }
         }
@@ -710,7 +724,17 @@ JSE.Cache = {
         }
     },
     addFromLib : function(array) {
-        array.splice(0, 1);
+        function sortNamespaces(a,b)
+        {
+            //Sort namespaces by alpha
+            if (a[0] < b[0]) {
+                return -1;
+            }
+            if (a[0] > b[0]) {
+                return 1;
+            }
+            return 0;
+        }
         //Conflict
         this.noConflict = {};
 
@@ -721,6 +745,7 @@ JSE.Cache = {
                 }} catch(e) {}
         }
         this.libsLoaded = this.libsLoaded.concat(array);
+        this.libsLoaded.sort(sortNamespaces);
     },
     fixConflicts : function() {
         var item, item2;
@@ -1165,10 +1190,13 @@ JSEImport = function (packageName, packageURL) {
         else if (namespace.transport === "require") {
             JSE.loadNodeComponent(namespace);
         }
-        else if (namespace.transport === "ws" && window && "WebSocket" in window) {
+        else if (namespace.transport === "ws" && JSE.canUseWebSocket) {
             JSE.loadWSComponent(namespace);
         }
         else {
+            if (namespace.url.indexOf("ws://") !== -1) {
+                namespace.url = namespace.url.replace("ws://", "http://");
+            }
             JSE.loadComponent(namespace);
         }
     }
