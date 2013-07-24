@@ -491,7 +491,7 @@ JSE = {
             } catch (e) {
 
             }
-            domScript.setAttribute("src", this.namespaces[this.namespaceLoadIndex].url + "?" + JSE.Cache.getLibsLoaded());
+            domScript.setAttribute("src", this.namespaces[this.namespaceLoadIndex].url + JSE.Cache.getLibsLoaded());
             this.stimulate("onLoadingNamespace", this.namespaces[this.namespaceLoadIndex].name);
             var body = document.getElementsByTagName("body")[0];
             var head = document.getElementsByTagName("head")[0];
@@ -762,7 +762,7 @@ JSE.Cache = {
         for (var i=0; i < this.libsLoaded.length; i++) {
             str += "&" + this.libsLoaded[i][0] + "=" + this.libsLoaded[i][1];
         }
-        return str;
+        return ((str !== "") ? "?" + str : str);
     },
     buildClassList : function() {
         var item, result = {};
