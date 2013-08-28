@@ -989,7 +989,7 @@ JSE.Object.prototype.prepare = function () {
 
     //Instanciate member objects and build wires
     var object = this;
-    if ((JSE.Object.prototype.prepare.caller !== JSE.componentLoaded) && (JSE.Object.prototype.prepare.caller) && (JSE.Object.prototype.prepare.caller.prototype)) {
+    if ((JSE.Object.prototype.prepare.caller !== JSE.endLoadingPhase) && (JSE.Object.prototype.prepare.caller) && (JSE.Object.prototype.prepare.caller.prototype)) {
         object = JSE.Object.prototype.prepare.caller.prototype;
     }
     var _wireToTreat = {};
