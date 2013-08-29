@@ -121,7 +121,7 @@ JSE = {
     externals: {},
     //WebSockets
     ws : {},
-    canUseWebSocket : (window && "WebSocket" in window),
+    canUseWebSocket : (typeof(window) !== "undefined" && "WebSocket" in window),
     startSocket : function(url) {
         JSE.isLoadingModule = true;
         var socket = new WebSocket(url);
